@@ -59,6 +59,7 @@ def text_to_speech():
     voice = request.args.get('voice', 'af_heart')  # Voice selection
     speed = float(request.args.get('speed', 1.0))  # Speech rate
     audio_format = request.args.get('format', 'wav')  # Output format
+    print("Argumetns",voice,speed,audio_format)
     
     # Generate audio using Kokoro TTS
     try:
