@@ -11,9 +11,6 @@
             background-color: #f4f4f9;
             color: #333;
         }
-        h1 {
-            color: #444;
-        }
         .container {
             max-width: 600px;
             margin: 0 auto;
@@ -21,6 +18,10 @@
             background: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #444;
+            text-align: center;
         }
         label {
             display: block;
@@ -34,31 +35,48 @@
             border-radius: 4px;
         }
         button {
+            width: 100%;
             padding: 10px 20px;
             background-color: #28a745;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #218838;
+        }
+        #audioPlayer {
+            width: 100%;
+            margin-top: 20px;
+            display: none;
+        }
+        #loadingIndicator {
+            text-align: center;
+            color: #666;
+            display: none;
+        }
+        #errorMessage {
+            color: red;
+            text-align: center;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Text-to-Speech Converter</h1>
+        
         <label for="text">Enter Text:</label>
         <textarea id="text" rows="4" placeholder="Type your text here..."></textarea>
-
+        
         <label for="voice">Select Voice:</label>
         <select id="voice">
             <option value="af_heart">Standard Female Voice</option>
             <option value="af_alloy">Female Alloy Voice</option>
             <option value="af_aoede">Female Aoede Voice</option>
             <option value="af_bella">Female Bella Voice</option>
-            <option value="af_alloy">Female Alloy Voice</option>
             <option value="af_jessica">Female Jessica Voice</option>
             <option value="af_kore">Female Kore Voice</option>
             <option value="af_sarah">Female Sarah Voice</option>
@@ -72,38 +90,75 @@
             <option value="am_onyx">Male Oynx Voice</option>
             <option value="am_puck">Male Puck Voice</option>
             <option value="am_santa">Male Santa Voice</option>
-
         </select>
-
+        
         <label for="speed">Speed:</label>
         <input type="number" id="speed" step="0.1" min="0.5" max="2.0" value="1.0">
-
+        
         <label for="format">Audio Format:</label>
         <select id="format">
             <option value="wav">WAV</option>
             <option value="mp3">MP3</option>
         </select>
-
+        
         <button onclick="generateSpeech()">Generate Speech</button>
+        
+        <div id="loadingIndicator">Generating speech...</div>
+        <div id="errorMessage"></div>
+        <audio id="audioPlayer" controls></audio>
     </div>
 
     <script>
-        function generateSpeech() {
+        async function generateSpeech() {
+            // Reset previous state
+            const audioPlayer = document.getElementById('audioPlayer');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            audioPlayer.style.display = 'none';
+            errorMessage.textContent = '';
+            loadingIndicator.style.display = 'block';
+
+            // Gather input parameters
             const text = document.getElementById('text').value;
             const voice = document.getElementById('voice').value;
             const speed = document.getElementById('speed').value;
             const format = document.getElementById('format').value;
 
+            // Validate input
             if (!text) {
-                alert('Please enter some text.');
+                loadingIndicator.style.display = 'none';
+                errorMessage.textContent = 'Please enter some text.';
                 return;
             }
 
-            // Construct the URL
-            const url = `/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&format=${format}`;
+            try {
+                // Construct the URL with parameters
+                const url = `/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&format=${format}`;
+                
+                // Fetch the audio
+                const response = await fetch(url);
+                
+                // Check if the response is ok
+                if (!response.ok) {
+                    throw new Error('Failed to generate speech');
+                }
 
-            // Redirect to the constructed URL
-            window.location.href = url;
+                // Get the audio blob
+                const audioBlob = await response.blob();
+                
+                // Create a URL for the blob
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Set the audio source and display
+                audioPlayer.src = audioUrl;
+                audioPlayer.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+            } catch (error) {
+                console.error('Error:', error);
+                loadingIndicator.style.display = 'none';
+                errorMessage.textContent = 'Failed to generate speech. Please try again.';
+            }
         }
     </script>
 </body>
