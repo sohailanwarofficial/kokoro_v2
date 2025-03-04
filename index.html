@@ -100,7 +100,7 @@
             }
 
             // Construct the URL
-            const url = `http://localhost:8080/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&format=${format}`;
+            const url = `/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&format=${format}`;
 
             // Redirect to the constructed URL
             window.location.href = url;
