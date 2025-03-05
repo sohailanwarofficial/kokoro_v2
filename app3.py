@@ -1,83 +1,101 @@
-from flask import Flask, request, send_from_directory, jsonify, url_for
-from kokoro import KPipeline
+from flask import Flask, request, send_file, jsonify, after_this_request
+import logging
 import soundfile as sf
+import tempfile
 import os
+from kokoro import KPipeline
 
-# Create a Flask web application
-app = Flask(__name__)
+# Initialize Flask app
+app = Flask(_name_)
 
-# Directory to store generated audio files
-OUTPUT_DIR = "output"  # Ensure it's "output" (relative path) instead of "/output"
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Initialize Kokoro pipeline with American English
-pipeline = KPipeline(lang_code='a')
+try:
+    logging.info("Initializing Kokoro TTS pipeline...")
+    pipeline = KPipeline(lang_code='a')
+    logging.info("Kokoro TTS pipeline initialized successfully.")
+except Exception as e:
+    logging.error(f"Failed to initialize Kokoro pipeline: {e}")
+    pipeline = None
 
 @app.route('/tts', methods=['GET'])
 def text_to_speech():
     """
-    Text-to-Speech API endpoint
-    
-    Usage:
-    http://localhost:8080/tts?text=Hello+world&voice=af_heart&speed=1.0&format=wav
-    
-    Parameters:
-    - text: The text to convert to speech (required)
-    - voice: The voice to use for synthesis (optional, defaults to af_heart)
-    - speed: Speech rate multiplier (optional, defaults to 1.0)
-    - format: Audio format (optional, defaults to wav)
-      
-    Returns:
-    - JSON response with audio file URL
+    Converts text to speech using Kokoro TTS
     """
+    logging.info("Received TTS request.")
+    if pipeline is None:
+        logging.error("Kokoro TTS pipeline is not initialized.")
+        return jsonify({"error": "Kokoro TTS pipeline not initialized"}), 500
     
-    # Get text from the URL parameter (required)
-    text = request.args.get('text', '')
+    # Get text input
+    text = request.args.get('text', '').strip()
     if not text:
+        logging.warning("No text provided in request.")
         return jsonify({"error": "Please provide text using the 'text' parameter"}), 400
     
-    # Get optional parameters with defaults
-    voice = request.args.get('voice', 'af_heart')  # Voice selection
-    speed = float(request.args.get('speed', 1.0))  # Speech rate
-    audio_format = request.args.get('format', 'wav')  # Output format
+    # Get optional parameters
+    voice = request.args.get('voice', 'af_heart')  # Default voice
+    speed = float(request.args.get('speed', 1.0))  # Speech speed
+    audio_format = request.args.get('format', 'wav').lower()  # Audio format
     
-    # Generate audio using Kokoro TTS
+    logging.info(f"Processing TTS request: text='{text}', voice='{voice}', speed={speed}, format='{audio_format}'")
+    
+    # Validate format
+    if audio_format not in ['wav', 'mp3']:
+        logging.warning("Invalid format provided.")
+        return jsonify({"error": "Invalid format. Use 'wav' or 'mp3'"}), 400
+    
     try:
+        logging.info("Generating speech using Kokoro pipeline...")
         generator = pipeline(
-            text,             # Text to synthesize
-            voice=voice,      # Voice to use
-            speed=speed,      # Speed multiplier
-            split_pattern=r'\n+'  # Pattern to split text on (default: newlines)
+            text=text,
+            voice=voice,
+            speed=speed,
+            split_pattern=r'\n+'  # Split text by newlines
         )
         
-        # Process the first audio segment
+        # Generate and save the first audio segment
         for _, _, audio in generator:
-            output_filename = f"output.{audio_format}"
-            output_path = os.path.join(OUTPUT_DIR, output_filename)
-            sf.write(output_path, audio, 24000)  # Save with 24kHz sample rate
-            print(f"Audio file generated: {output_path}")  # Log the file path
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{audio_format}") as temp_audio:
+                output_path = temp_audio.name
+                logging.info(f"Saving generated speech to temporary file: {output_path}")
+                sf.write(output_path, audio, 24000)  # Save audio with a 24k sample rate
             break
         
-        # Generate the file URL
-        file_url = url_for('get_audio', filename=output_filename, _external=True)
-        return jsonify({'file_url': file_url})
+        logging.info("Speech generation completed successfully.")
+        
+        # Ensure the file is deleted AFTER the response is sent
+        response = send_file(output_path, mimetype=f'audio/{audio_format}', as_attachment=True, download_name=f"speech_output.{audio_format}")
+                
+        logging.info("Sending generated speech file for download.")
+        return response
     
     except Exception as e:
-        print(f"Error generating speech: {str(e)}")
-        return jsonify({"error": f"Error generating speech: {str(e)}"}), 500
+        logging.error(f"Error generating speech: {e}")
+        return jsonify({"error": str(e)}), 500
 
-# Route to serve audio files directly from "output/" directory
-@app.route('/output/<filename>')
-def get_audio(filename):
-    """Serve saved audio files from the /output directory."""
-    return send_from_directory(OUTPUT_DIR, filename, mimetype='audio/*')
+@app.route('/voices', methods=['GET'])
+def list_voices():
+    """
+    Lists available voices for the current language
+    """
+    logging.info("Fetching available voices.")
+    voices = {
+        "english": ["af_heart", "af_emotional", "af_peaceful"],
+        "spanish": ["es_voice1"],
+        "french": ["fr_voice1"],
+        "hindi": ["hi_voice1"],
+        "italian": ["it_voice1"],
+        "portuguese": ["pt_voice1"],
+        "japanese": ["ja_voice1"],
+        "chinese": ["zh_voice1"]
+    }
+    logging.info("Available voices fetched successfully.")
+    return jsonify(voices)
 
-# Serve the index.html file
-@app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
-
-if __name__ == '__main__':
-    # Run the Flask application
-    app.run(host='0.0.0.0', port=8080)
+if _name_ == '_main_':
+    logging.info("Starting Flask server...")
+    app.run(host='0.0.0.0', port=8080, debug=False)
