@@ -1,10 +1,14 @@
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from kokoro import KPipeline
 import soundfile as sf
-import io
+import os
 
 app = Flask(__name__)
 pipeline = KPipeline(lang_code='a')
+
+# Ensure output directory exists
+OUTPUT_DIR = "output"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 @app.route('/tts', methods=['GET'])
 def text_to_speech():
@@ -20,19 +24,26 @@ def text_to_speech():
         generator = pipeline(text, voice=voice, speed=speed, split_pattern=r'\n+')
 
         for _, _, audio in generator:
-            buffer = io.BytesIO()
-            sf.write(buffer, audio, 24000, format=audio_format.upper())  # Save directly to buffer
-            buffer.seek(0)  # Reset buffer position
+            filename = f"{text.replace(' ', '_')}.{audio_format}"
+            output_path = os.path.join(OUTPUT_DIR, filename)
+            
+            sf.write(output_path, audio, 24000, format=audio_format.upper())
 
-            return send_file(
-                buffer,
-                mimetype=f'audio/{audio_format}',
-                as_attachment=True,
-                download_name=f"speech.{audio_format}"
-            )
+            return jsonify({"message": "Audio generated", "file_url": f"/fetch_audio/{filename}"})
 
     except Exception as e:
         return f"Error generating speech: {str(e)}", 500
+
+
+@app.route('/fetch_audio/<filename>', methods=['GET'])
+def fetch_audio(filename):
+    file_path = os.path.join(OUTPUT_DIR, filename)
+    
+    if os.path.exists(file_path):
+        return send_file(file_path, mimetype=f'audio/{filename.split(".")[-1]}')
+    else:
+        return "File not found", 404
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
